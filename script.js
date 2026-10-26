@@ -1,8 +1,7 @@
-リンクを転送しました
 // -------- 1. Connect to the database (Supabase) --------
 // Your teacher will give you these two values.
-const SUPABASE_URL = "https://axdihadyqettqyeuovfr.supabase.co";
-const SUPABASE_KEY = "sb_publishable_EpkjbX3WpSwQ3APjuCJBJg_VCXUnc1l";
+const SUPABASE_URL = "https://ruavkzzmbklhhmxgliac.supabase.co";
+const SUPABASE_KEY = "sb_publishable_64fYrt79YlDuC0yAJ0aCjQ_nulLcQv-";
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -17,6 +16,7 @@ const passwordInput = document.getElementById("password");
 const signupBtn = document.getElementById("signup-btn");
 const logoutBtn = document.getElementById("logout-btn");
 const who = document.getElementById("who");
+const chatStatus = document.getElementById("chat-status");
 const messageList = document.getElementById("messages");
 const messageForm = document.getElementById("message-form");
 const messageInput = document.getElementById("message-input");
@@ -35,28 +35,38 @@ async function signUp() {
   }
 
   authMessage.textContent = "Creating your account...";
-  const { data, error } = await sb.auth.signUp({
-    email: emailInput.value.trim(),
-    password: passwordInput.value,
-    options: { data: { display_name: name } },
-  });
+  try {
+    const { data, error } = await sb.auth.signUp({
+      email: emailInput.value.trim(),
+      password: passwordInput.value,
+      options: { data: { display_name: name } },
+    });
 
-  if (error) {
-    authMessage.textContent = error.message;
-  } else if (!data.session) {
-    authMessage.textContent = "Check your email to confirm your account.";
-  } else {
-    authMessage.textContent = ""; 
+    if (error) {
+      authMessage.textContent = error.message;
+    } else if (!data.session) {
+      authMessage.textContent = "Check your email to confirm your account.";
+    } else {
+      authMessage.textContent = "";
+    }
+  } catch (error) {
+    console.error("Sign-up failed:", error);
+    authMessage.textContent = error.message || "Could not reach Supabase. Check your connection and try again.";
   }
 }
 
 async function login() {
   authMessage.textContent = "Logging in...";
-  const { error } = await sb.auth.signInWithPassword({
-    email: emailInput.value.trim(),
-    password: passwordInput.value,
-  });
-  authMessage.textContent = error ? error.message : "";
+  try {
+    const { error } = await sb.auth.signInWithPassword({
+      email: emailInput.value.trim(),
+      password: passwordInput.value,
+    });
+    authMessage.textContent = error ? error.message : "";
+  } catch (error) {
+    console.error("Login failed:", error);
+    authMessage.textContent = error.message || "Could not reach Supabase. Check your connection and try again.";
+  }
 }
 
 authForm.addEventListener("submit", (event) => {
@@ -87,12 +97,19 @@ async function startChat(user) {
   authScreen.hidden = true;
   chatScreen.hidden = false;
   who.textContent = "Loading...";
+  chatStatus.hidden = false;
+  chatStatus.textContent = "Loading chat...";
 
-  await loadNames();
-  who.textContent = names[user.id] || "Signed in";
-  await loadMessages();
-  listenForNewMessages();
-  messageInput.focus();
+  try {
+    await loadNames();
+    who.textContent = names[user.id] || "Signed in";
+    await loadMessages();
+    listenForNewMessages();
+    messageInput.focus();
+  } catch (error) {
+    console.error("Could not initialize chat:", error);
+    chatStatus.textContent = "Could not load chat data: " + error.message;
+  }
 }
 
 function stopChat() {
@@ -100,6 +117,8 @@ function stopChat() {
   if (channel) sb.removeChannel(channel);
   channel = null;
   messageList.innerHTML = "";
+  chatStatus.hidden = true;
+  chatStatus.textContent = "";
   passwordInput.value = "";
   chatScreen.hidden = true;
   authScreen.hidden = false;
@@ -148,10 +167,10 @@ messageForm.addEventListener("submit", async (event) => {
     return;
   }
 
-  // We send ONLY the text. The database fills in who sent it.
+  // Include the authenticated user so inserts also work with older table defaults.
   const { data, error } = await sb
     .from("messages")
-    .insert({ content: content })
+    .insert({ user_id: currentUser.id, content: content })
     .select()
     .single();
 
@@ -168,7 +187,7 @@ async function loadNames() {
   const { data, error } = await sb
     .from("profiles")
     .select("id, display_name");
-  if (error) return console.error(error);
+  if (error) throw error;
 
   data.forEach(p => {
     names[p.id] = p.display_name;
@@ -182,7 +201,7 @@ async function loadMessages() {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  if (error) return console.error(error);
+  if (error) throw error;
 
   messageList.innerHTML = "";
   data.reverse().forEach(showMessage);
@@ -220,7 +239,16 @@ function listenForNewMessages() {
       { event: "DELETE", schema: "public", table: "messages" },
       (payload) => removeMessage(payload.old.id)
     )
-    .subscribe();
+    .subscribe((status, error) => {
+      if (status === "SUBSCRIBED") {
+        chatStatus.hidden = true;
+        chatStatus.textContent = "";
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        console.error("Realtime connection failed:", error);
+        chatStatus.hidden = false;
+        chatStatus.textContent = "Live updates are unavailable. Check Supabase Realtime settings.";
+      }
+    });
 }
 
 function removeMessage(id) {

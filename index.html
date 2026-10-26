@@ -32,7 +32,7 @@
     </main>
 
     <!-- Screen 2: the chat room -->
-    <main id="chat-screen" class="chat hidden">
+    <main id="chat-screen" class="chat" hidden>
         <header class="chat-header">
             <h1>Class Chat</h1>
             <div class="controls">
@@ -40,6 +40,8 @@
                 <button id="logout-btn" type="button" class="ghost">Log out</button>
             </div>
         </header>
+
+        <p id="chat-status" class="chat-status" role="status" aria-live="polite" hidden></p>
         
         <ul id="messages" class="messages" aria-live="polite"></ul>
 

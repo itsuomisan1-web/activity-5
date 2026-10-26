@@ -70,6 +70,14 @@ body {
   color: var(--muted);
 }
 
+.chat-status {
+  margin: 0;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 /* -------- Messages -------- */
 .messages {
   flex: 1;
